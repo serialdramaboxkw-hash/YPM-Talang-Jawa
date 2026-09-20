@@ -5,69 +5,49 @@ on:
   push:
     branches:
       - main
+      - master
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Siapkan project Flutter dari ZIP
-        shell: bash
-        run: |
-          set -e
-
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ZIP project tidak ditemukan."
-            exit 1
-          fi
-
-          echo "ZIP ditemukan: $ZIP_FILE"
-
-          mkdir -p project
-          unzip -q "$ZIP_FILE" -d project
-
-          PUBSPEC=$(find project -type f -name "pubspec.yaml" | head -n 1)
-
-          if [ -z "$PUBSPEC" ]; then
-            echo "pubspec.yaml tidak ditemukan."
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$PUBSPEC")
-
-          echo "Project Flutter ditemukan di: $PROJECT_DIR"
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.5"
+          flutter-version: '3.29.3'
           channel: stable
           cache: true
 
-      - name: Flutter Pub Get
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
+      - name: Find Flutter project
+        id: project
+        shell: bash
+        run: |
+          PROJECT_DIR=$(dirname "$(find . -name pubspec.yaml -type f | head -n 1)")
+          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
+            PROJECT_DIR="."
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project directory: $PROJECT_DIR"
 
-      - name: Build APK Release
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release
+      - name: Fix dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          sed -i 's/geocoding: \^3\.0\.1/geocoding: ^4.0.0/' pubspec.yaml
+          sed -i 's/geolocator: \^13\.0\.1/geolocator: ^14.0.3/' pubspec.yaml
+          flutter pub get
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ypm-talang-jawa-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          name: YPM-Talang-Jawa-APK
+          path: "**/build/app/outputs/flutter-apk/app-release.apk"
           if-no-files-found: error
