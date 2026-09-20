@@ -1,0 +1,72 @@
+name: Build APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+
+      - name: Find project ZIP
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ZIP project tidak ditemukan"
+            exit 1
+          fi
+
+          echo "ZIP ditemukan: $ZIP_FILE"
+
+          mkdir -p flutter_project
+          unzip -q "$ZIP_FILE" -d flutter_project
+
+      - name: Find Flutter project
+        run: |
+          PUBSPEC=$(find flutter_project -name pubspec.yaml -print -quit)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "pubspec.yaml tidak ditemukan"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PUBSPEC")
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "Flutter project: $PROJECT_DIR"
+
+      - name: Flutter pub get
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YPM-Talang-Jawa-APK
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
